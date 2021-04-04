@@ -6,25 +6,27 @@ Useful for making test sets based on 'real' certificates taken from the wild.
 
 Use with care.
 
-    Syntax resign [-f] [-d <days>] [-K | -k <replacementKey>] [-v] [-p <password>] [CertToResign [CA [CAkey]]]
+## syntax
 
-    -F    Reset the fromdate to today (default is to leave as is).
-    -S    Do not change the issuer; leave as is (default is to change to subject of signing cert).
-    -d num    Set the validity to <days> from now (default is 10).
-    -v     Verbose.
-    -p    Use specific replacement key.
-    -K    Regenerate a pub/priv keypair to replace existing, and output private key (in the clear).
-    -p str    Password for the private key of the CA.
+    Syntax resign [-f] [-d <days>] [-K | -k <replacementKey>] [-v] [-p <password>] [CertToResign [CA [CAkey]]]
+    
+      -d     Reset the fromdate to today (default is to leave as is).
+      -S      Do not change the issuer; leave as is (default is to change to subject of signing cert).
+      -d num  Set the validity to <days> from now (default is 10).
+      -v      Verbose.
+      -p      Use specific replacement key.
+      -K      Regenerate a pub/priv keypair to replace existing, and output private key (in the clear).
+      -p str  Password for the private key of the CA. The default is '1234'.
 
     CertToResign
-    Certificate that will be resigned. May contain a key.
+        Certificate that will be resigned. May contain a key.
 
     CA (optional)
-    Certificate used to resign above; when not present the CertToResign is
-    used (i.e. a self singed cert is created).
+        Certificate used to resign above; when not present the CertToResign is
+        used (i.e. a self singed cert is created).
 
     CAkey (optional)
-    CA key if not present in the CA file itself.
+        CA key if not present in the CA file itself.
 
     Use a '-' for stdin.
 
