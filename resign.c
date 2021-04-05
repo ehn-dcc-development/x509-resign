@@ -179,6 +179,54 @@ int main(int argc, char ** argv) {
                 exit(1);
 	};
 
+	if (regen) {
+		EVP_PKEY * oldkey = X509_PUBKEY_get0(X509_get_X509_PUBKEY(cert));
+		EVP_PKEY_CTX * pctx;
+
+                assertOrBail(pctx = EVP_PKEY_CTX_new(oldkey,NULL));
+                assertOrBail(newkey = EVP_PKEY_new());
+
+		if (verbose) {
+			ASN1_PCTX * actx= ASN1_PCTX_new();
+			BIO_printf(ver,"Regenerating keypair - can take a bit. ot time\nSpecification:\n");
+			EVP_PKEY_print_params(ver, oldkey, 4, actx);
+			ASN1_PCTX_free(actx);
+		};
+
+		BN_GENCB * cb = BN_GENCB_new();
+		BN_GENCB_set(cb, req_cb, err);
+	
+		char buff[PATH_MAX];
+		const char * rndfile = RAND_file_name(buff,sizeof(buff));
+		assertOrBail(RAND_load_file(rndfile,-1));
+
+                if (!EVP_PKEY_keygen_init(pctx)) {
+			BIO_printf(err, "Error EVP_PKEY_keyge_init: ");
+               		ERR_print_errors(err);
+               		exit(1);
+		};
+
+		/* if it is an RSA key - manually set the key length - as that does not seem to get copied.
+		 */
+		if(EVP_PKEY_id(oldkey)== EVP_PKEY_RSA) {
+			RSA * rsa = EVP_PKEY_get0_RSA(oldkey);
+			int bits = RSA_bits(rsa);
+			if (verbose)
+				BIO_printf(ver,"Forcing RSA size to %d bits\n", bits);
+			assertOrBail(EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, RSA_bits(rsa)));
+		};
+                if (!EVP_PKEY_keygen(pctx,&newkey)) {
+			BIO_printf(err, "Error EVP_PKEY_keygen_gen: ");
+               		ERR_print_errors(err);
+               		exit(1);
+		};
+                BN_GENCB_free(cb);
+                EVP_PKEY_CTX_free(pctx);
+
+		assertOrBail(X509_set_pubkey(cert, newkey));
+	};
+
+
 	if (optind < argc) {
 		bio=BIO_new(BIO_s_file());
 		if (strcmp(argv[optind],"-")) {
@@ -206,40 +254,6 @@ int main(int argc, char ** argv) {
 		ca = X509_dup(cert);
 	};
 
-	if (regen) {
-		EVP_PKEY * oldkey = X509_PUBKEY_get0(X509_get_X509_PUBKEY(cert));
-		EVP_PKEY_CTX * pctx;
-
-                assertOrBail(pctx = EVP_PKEY_CTX_new(oldkey,NULL));
-                assertOrBail(newkey = EVP_PKEY_new());
-
-		if (verbose) {
-			ASN1_PCTX * actx= ASN1_PCTX_new();
-			BIO_printf(ver,"Regenerating keypair - can take a bit. ot time\nSpecification:\n");
-			EVP_PKEY_print_params(ver, oldkey, 4, actx);
-			EVP_PKEY_print_params(ver, newkey, 4, actx);
-			ASN1_PCTX_free(actx);
-		};
-
-		BN_GENCB * cb = BN_GENCB_new();
-		BN_GENCB_set(cb, req_cb, err);
-	
-		RAND_load_file(".rnd", -1);
-
-                if (!EVP_PKEY_keygen_init(pctx)) {
-			BIO_printf(err, "Error EVP_PKEY_keyge_init: ");
-               		ERR_print_errors(err);
-               		exit(1);
-		};
-                if (!EVP_PKEY_keygen(pctx,&newkey)) {
-			BIO_printf(err, "Error EVP_PKEY_keygen_gen: ");
-               		ERR_print_errors(err);
-               		exit(1);
-		};
-                BN_GENCB_free(cb);
-                EVP_PKEY_CTX_free(pctx);
-	};
-
 	if (optind < argc) {
 		bio=BIO_new(BIO_s_file());
 		if (strcmp(argv[optind],"-")) {
@@ -262,6 +276,8 @@ int main(int argc, char ** argv) {
 			BIO_printf(ver,"Reading CA key from same place.\n");
 		BIO_seek(bio,0);
 	} else {
+		if (verbose)
+			BIO_printf(ver,"Using generated key.\n");
 		pkey = newkey;
 	}
 
@@ -317,9 +333,9 @@ int main(int argc, char ** argv) {
         EVP_PKEY *upkey = X509_get_pubkey(ca);
 	assertOrBail(upkey);
 
-	if (EVP_PKEY_cmp(pkey,upkey) == 0) {
-		BIO_printf(err, "Warning: CA and CAkey not made for each other\n");
-		// exit(1);
+	if (pkey != newkey && EVP_PKEY_cmp(pkey,upkey) == 0) {
+		BIO_printf(err, "Error: CA and CAkey not made for each other\n");
+		exit(1);
 	};
 	assertOrBail(EVP_PKEY_missing_parameters(pkey) == 0);
 
