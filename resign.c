@@ -1,3 +1,19 @@
+/* Copyright (c) 2003-2006, 2012, 2021 Dirk-Willem van Gulik <dirkx(a)apache(dot)org>
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
+
 #include <openssl/conf.h>
 #include <openssl/ossl_typ.h>
 
@@ -17,23 +33,6 @@
 #include <unistd.h>
 #include <string.h>
 
-/* 
-
- Copyright (c) 2003-2006, 2012, 2021 Dirk-Willem van Gulik <dirkx(a)apache(dot)org>
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
- 
-*/
 
 int verbose = 0;
 const char * passwd = "1234";
@@ -54,8 +53,8 @@ static int req_cb(int p, int n, BN_GENCB *cb)
         return 1;
         }
 
-void usage(char * prog) { 
-	fprintf(stderr,"Syntax %s [-f] [-d <days>] [-K | -k <replacementKey>] [-v] [-p <password>] [CertToResign [CA [CAkey]]]\n" \
+void usage(char * prog) {
+	fprintf(stderr,"Syntax %s [-F] [-d <days>] [-K | -k <replacementKey>] [-v] [-p <password>] [CertToResign [CA [CAkey]]]\n" \
 "\n" \
 "	-F	Reset the fromdate to today (default is to leave as is).\n" \
 "	-S	Do not change the issuer; leave as is (default is to change to subject of signing cert).\n" \
@@ -145,7 +144,7 @@ int main(int argc, char ** argv) {
                        	 	ERR_print_errors(err);
 				exit(1);
                  	};
-			if (verbose) 
+			if (verbose)
 				BIO_printf(ver,"Reading replacement key from %s\n", rekeyfile);
 		} else {
                 	BIO_set_fp(bio,stdin,BIO_NOCLOSE);
@@ -158,35 +157,6 @@ int main(int argc, char ** argv) {
                		exit(1);
 		};
 	}
-
-	if (regen) {
-		if (verbose)
-			BIO_printf(ver,"Regenerating keypair - can take a bit.\n");
-		assertOrBail(newkey = EVP_PKEY_new());
-
-		BN_GENCB * cb = BN_GENCB_new();
-		BN_GENCB_set(cb, req_cb, err);
-	
-		RAND_load_file(".rnd", -1);
-
-                RSA *rsa = RSA_new(); assertOrBail(rsa);
-                BIGNUM *bn = BN_new(); assertOrBail(bn);
-
-		assertOrBail(BN_set_word(bn, 0x10001));
-		long keylen = 1024;
-
-                if (!RSA_generate_key_ex(rsa, keylen, bn, cb)) {
-			BIO_printf(err, "Error RSA_generate_key_ex");
-               		ERR_print_errors(err);
-               		exit(1);
-		};
-                if (!EVP_PKEY_assign_RSA(newkey, rsa)) {
-			BIO_printf(err, "Error EVP_PKEY_assign_RSA ");
-               		ERR_print_errors(err);
-               		exit(1);
-		};
-                 BN_GENCB_free(cb);
-	};
 
 	if (optind < argc && strcmp(argv[optind],"-")) {
 		if (BIO_read_filename(bio,argv[optind])<0) {
@@ -236,6 +206,40 @@ int main(int argc, char ** argv) {
 		ca = X509_dup(cert);
 	};
 
+	if (regen) {
+		EVP_PKEY * oldkey = X509_PUBKEY_get0(X509_get_X509_PUBKEY(cert));
+		EVP_PKEY_CTX * pctx;
+
+                assertOrBail(pctx = EVP_PKEY_CTX_new(oldkey,NULL));
+                assertOrBail(newkey = EVP_PKEY_new());
+
+		if (verbose) {
+			ASN1_PCTX * actx= ASN1_PCTX_new();
+			BIO_printf(ver,"Regenerating keypair - can take a bit. ot time\nSpecification:\n");
+			EVP_PKEY_print_params(ver, oldkey, 4, actx);
+			EVP_PKEY_print_params(ver, newkey, 4, actx);
+			ASN1_PCTX_free(actx);
+		};
+
+		BN_GENCB * cb = BN_GENCB_new();
+		BN_GENCB_set(cb, req_cb, err);
+	
+		RAND_load_file(".rnd", -1);
+
+                if (!EVP_PKEY_keygen_init(pctx)) {
+			BIO_printf(err, "Error EVP_PKEY_keyge_init: ");
+               		ERR_print_errors(err);
+               		exit(1);
+		};
+                if (!EVP_PKEY_keygen(pctx,&newkey)) {
+			BIO_printf(err, "Error EVP_PKEY_keygen_gen: ");
+               		ERR_print_errors(err);
+               		exit(1);
+		};
+                BN_GENCB_free(cb);
+                EVP_PKEY_CTX_free(pctx);
+	};
+
 	if (optind < argc) {
 		bio=BIO_new(BIO_s_file());
 		if (strcmp(argv[optind],"-")) {
@@ -244,7 +248,7 @@ int main(int argc, char ** argv) {
                        	 	ERR_print_errors(err);
 				exit(1);
 			};
-			if (verbose) 
+			if (verbose)
 				BIO_printf(ver,"Reading CA key from %s.\n", argv[optind]);
 		} else {
 			if (verbose)
@@ -252,7 +256,7 @@ int main(int argc, char ** argv) {
 			BIO_set_fp(bio,stdin,BIO_NOCLOSE);
 		}
 		optind++;
-	} 
+	}
 	else if (!newkey) {
 		if (verbose)
 			BIO_printf(ver,"Reading CA key from same place.\n");
@@ -267,8 +271,8 @@ int main(int argc, char ** argv) {
        	        	exit(1);
 		};
 
-	assertOrBail(cert); 
-	assertOrBail(ca); 
+	assertOrBail(cert);
+	assertOrBail(ca);
 	assertOrBail(pkey);
 
 	if (newkey) {
@@ -355,7 +359,7 @@ int main(int argc, char ** argv) {
 	}
 	
 
-	// If there is an authority key identifier - replace it by mine. 
+	// If there is an authority key identifier - replace it by mine.
 	//
 	int ikeyid = X509_get_ext_by_NID(cert, NID_authority_key_identifier, -1);
 	if (ikeyid >= 0) {
@@ -366,7 +370,7 @@ int main(int argc, char ** argv) {
 			BIO_printf(ver,"Warning - we should be replacing the AuthorityKeyIdentifier; but the signing CA has no subjectKeyIdentifier. So we delete the former from the cert signed.\n");
 			X509_delete_ext(cert,ikeyid);
 		} else {
-			if (verbose) 
+			if (verbose)
 				BIO_printf(ver,"Replacing authorityKeyIdentifier by subjectKeyIdentifier of CA\n");
 
 			X509_EXTENSION * cext = X509_get_ext(ca, iid);
