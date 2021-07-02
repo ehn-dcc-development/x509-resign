@@ -17,6 +17,8 @@ Use with care.
       -p      Use specific replacement key.
       -K      Regenerate a pub/priv keypair to replace existing, and output private key (in the clear).
       -p str  Password for the private key of the CA. The default is '1234'.
+      -i,-s   Prevent any changes to the subjectKeyIdentifier or the issuerKeyIdentifier. Useful to check 
+              if pinning is done correctly.
 
     CertToResign
         Certificate that will be resigned. May contain a key.
@@ -29,7 +31,6 @@ Use with care.
         CA key if not present in the CA file itself.
 
     Use a '-' for stdin.
-
 
 ## Hi Profile / Dutch UZI passes
 
