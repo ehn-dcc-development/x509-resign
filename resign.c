@@ -58,6 +58,8 @@ void usage(char * prog) {
 "\n" \
 "	-F	Reset the fromdate to today (default is to leave as is).\n" \
 "	-S	Do not change the issuer; leave as is (default is to change to subject of signing cert).\n" \
+"	-s      Keep the subject key identifier the same\n" \
+"	-i      Keep the identifier key identifier the same\n" \
 "	-d num	Set the validity to <days> from now (default is 10).\n" \
 "	-v 	Verbose.\n" \
 "	-p	Use specific replacement key.\n" \
@@ -105,6 +107,8 @@ int main(int argc, char ** argv) {
 	int ftime = 0;
 	int days = 0;
 	int subject = 1;
+	int changeski = 1;
+	int changeiid = 1;
 
     	while ((c = getopt(argc, argv, "d:FSvKk:p:")) != -1) {
 	 	switch(c) {
@@ -113,6 +117,12 @@ int main(int argc, char ** argv) {
 			break;
         	case 'S':
 			subject = 0;
+			break;
+        	case 's':
+			changeski = 0;
+			break;
+        	case 'i':
+			changeiid = 0;
 			break;
         	case 'd':
 			days = atoi(optarg);
@@ -344,7 +354,7 @@ int main(int argc, char ** argv) {
 	// true - as it may also be something else ?
 	//
 	int isubject = X509_get_ext_by_NID(cert, NID_subject_key_identifier, -1);
-	if (isubject >= 0 && newkey) {
+	if (changeski && isubject >= 0 && newkey) {
 		if (verbose)
 			BIO_printf(ver,"Replacing subjectKeyIdenitfier by the SHA1 of the new key.\n");
 	        ASN1_OCTET_STRING *oct;
@@ -378,7 +388,7 @@ int main(int argc, char ** argv) {
 	// If there is an authority key identifier - replace it by mine.
 	//
 	int ikeyid = X509_get_ext_by_NID(cert, NID_authority_key_identifier, -1);
-	if (ikeyid >= 0) {
+	if (changeiid && ikeyid >= 0) {
 		X509_EXTENSION * ex = X509_get_ext(cert, ikeyid);
 
 		int iid = X509_get_ext_by_NID(ca, NID_subject_key_identifier, -1);
