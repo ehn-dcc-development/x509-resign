@@ -110,7 +110,7 @@ int main(int argc, char ** argv) {
 	int changeski = 1;
 	int changeiid = 1;
 
-    	while ((c = getopt(argc, argv, "d:FSvKk:p:")) != -1) {
+    	while ((c = getopt(argc, argv, "d:FSvKk:p:si")) != -1) {
 	 	switch(c) {
         	case 'F':
 			ftime = 1;
